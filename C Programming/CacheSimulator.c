@@ -1,205 +1,306 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
-#include<math.h>
-typedef struct{
-	unsigned long int tag;
-	unsigned int valid;
-	unsigned int timestamp;
+
+typedef struct Node {
+	int value, order;
+	char* name;
+	struct Node* next;
 } Node;
 
-int isValidSize(int);
-void throwError();
-Node** parse(Node**, int, char);
-Node** prefetch(Node**, int, char);
-Node** dirprefetch(Node** cached, int address, char op);
-int cache_size, block_size, associativity, prefetch_size, count = 1;
-int sets, block_bits, index_bits;
-int NP_MemoryReads = 0, NP_MemoryWrites=0, NP_CacheHits=0, NP_CacheMisses=0;
-int P_MemoryReads = 0, P_MemoryWrites=0, P_CacheHits=0, P_CacheMisses=0;
-char* cache_policy;
-int main(int argc, char** argv){
-	FILE* tracer_file;
-	if (argc < 6) throwError();
-	if (isValidSize(atoi(argv[1]))  == 1)
-		cache_size = atoi(argv[1]);
-	else throwError();
-	if (isValidSize(atoi(argv[2])) == 1)
-		block_size = atoi(argv[2]);
-	else throwError();
-	if (strcmp(argv[3], "fifo") == 0 || strcmp(argv[3], "lru") == 0)
-		cache_policy = argv[3];
-	else throwError();
-	if (strcmp(argv[4], "direct") == 0)
-		associativity = 1;
-	else if (strcmp(argv[4], "assoc") == 0)
-		associativity = cache_size/block_size;
-	else { 
-		int n = -1;
-		sscanf(argv[4], "assoc:%d", &n);
-		if (n == -1 || isValidSize(n) == 0) throwError();
-		associativity = n;
-	}
-	if (atoi(argv[5]) >= 0)
-		prefetch_size = atoi(argv[5]);
-	else throwError();
-	tracer_file = fopen(argv[6], "r");
-	if (tracer_file == NULL) throwError();
-	sets = cache_size / (block_size * associativity);
-	block_bits = log2(block_size);
-	index_bits = log2(sets);
-	Node** cache = malloc(sets * sizeof(Node*));
-	Node** precache = malloc(sets * sizeof(Node*));
-	for (int i = 0; i < sets; i++){
-		cache[i] = malloc(associativity * sizeof(Node)); 
-		precache[i] = malloc(associativity * sizeof(Node));
-	}
-	for (int i = 0; i < sets; i++)
-	for (int j = 0; j < associativity; j++){
-		cache[i][j].valid = 0;
-		cache[i][j].tag = 0;
-		cache[i][j].timestamp = 0;
-		precache[i][j].valid = 0;
-		precache[i][j].tag = 0;
-		precache[i][j].timestamp = 0;
-	}
-	int hex;
-	char operation;
-	while (1){
-		fscanf(tracer_file, "%c %x\n", &operation, &hex);
-		if (operation == '#' || operation == 'e' || operation == 'o' || operation == 'f') break;
-		else {
-				cache = parse(cache, hex, operation);
-				precache = prefetch(precache, hex, operation);	
-		} 
-	}
-printf("no-prefetch\nMemory reads: %d\nMemory writes: %d\nCache hits: %d\nCache misses: %d\n", NP_MemoryReads, NP_MemoryWrites, NP_CacheHits, NP_CacheMisses);
-printf("with-prefetch\nMemory reads: %d\nMemory writes: %d\nCache hits: %d\nCache misses: %d\n", P_MemoryReads, P_MemoryWrites, P_CacheHits, P_CacheMisses);
-	for (int n = 0; n < sets; n++){
-		free(cache[n]);
-		free(precache[n]);
-	}
-	free(cache);
-	free(precache);
-	return 0;
-}
-void throwError(){
-	printf("error\n");
-	exit(0);
-}
-int isValidSize(int n){
-	return ((n > 0) && (((n & (n-1)) == 0)));
-}
-Node** parse(Node** cached, int address, char op){
-		unsigned long tag = (address>>block_bits) >> index_bits;
-		unsigned int set = (address>>block_bits) & ((1 << index_bits)-1);
-		for (int i = 0; i < associativity; i++){
-			if (cached[set][i].tag == tag){
-				if (op == 'W')
-					NP_MemoryWrites++;
-				NP_CacheHits++;
-				if (strcmp(cache_policy, "lru") == 0){
-					cached[set][i].timestamp = count;
-					count++;
-				}
-				return cached;
-			}
+
+int NOT(int);
+int AND(int, int);
+int OR(int, int);
+int NOR(int, int);
+int NAND(int, int);
+int XOR(int, int);
+int XNOR(int, int);
+
+int* getGrayArray(int, int);
+int isNumeric(char*);
+Node* addVariableToList(Node*, int, int, char*);
+int getVariableFromList(Node*, char*);
+void generateEmptyGrayCode();
+Node* updateByName(Node*, char*, int);
+Node* updateByOrder(Node*, int, int);
+char* getVariableByOrder(Node*, int);
+void freeNodes(Node*);
+
+Node* inputs = NULL;
+int in, out;
+int** graycode;
+char* bank[5000];
+int count = 0;
+
+	int main(int argc, char** argv){
+		FILE* file = fopen(argv[1], "r");
+		if (file == NULL) { printf("invalid file\n"); return 0; }	
+	
+		//REGISTER INPUTS
+		fscanf(file, "INPUTVAR %d ", &in);
+		for (int i = 0; i < in; i++){
+		char* inv = malloc(sizeof(char*));
+			fscanf(file, " %s ", inv);
+			inputs = addVariableToList(inputs, i+1, -2, inv);
 		}
-	        NP_CacheMisses++;
-		NP_MemoryReads++;
-		if (op == 'W')
-			NP_MemoryWrites++;
-		int index = 0, timestamp = cached[set][0].timestamp;
-		for (int i = 0; i < associativity; i++){
-			if (cached[set][i].valid == 0){ 
-				cached[set][i].valid = 1;
-				cached[set][i].tag = tag;
-				cached[set][i].timestamp = count;
+		
+		//REGISTER OUTPUTS	
+		fscanf(file, "OUTPUTVAR %d ", &out);
+		for (int i = 0; i < out; i++){
+		char* onv = malloc(sizeof(char*));
+			fscanf(file, " %s ", onv);
+			inputs = addVariableToList(inputs, -1 * (i+1), -2, onv);
+		}
+		//GENERATE BASE GRAYCODE
+		graycode = malloc((1<<in) * sizeof(int*));
+		for (int i = 0; i < (1<<in); i++)
+			graycode[i] = malloc((in+out) * sizeof(int));
+		generateEmptyGrayCode();		
+		char* move = malloc(22); 
+
+			while (fscanf(file, "%s", move) != EOF){
+				bank[count] = move;
 				count++;
-				return cached;			
-			} 
-			if (cached[set][i].timestamp < timestamp){
-				timestamp = cached[set][i].timestamp;
-				index = i;
+				move = malloc(22); //max str
 			}
- 		}
-		cached[set][index].tag = tag;
-		cached[set][index].timestamp = count;
-		count++;
-	return cached;
-}
-Node** prefetch(Node** cached, int address, char op){ 
-		unsigned long tag = (address>>block_bits) >> index_bits;
-		unsigned int set = (address>>block_bits) & ((1 << index_bits)-1);
-		for (int i = 0; i < associativity; i++){
-			if (cached[set][i].tag == tag){ //i --> 0
-				if (op == 'W')
-					P_MemoryWrites++;
-				P_CacheHits++;
-				if (strcmp(cache_policy, "lru") == 0){
-					cached[set][i].timestamp = count; //i --> 0
-					count++;
-				}
-				return cached;
+
+		int one, two;
+		for (int i = 0; i < (1<<in); i++){ //edit gray code row by row	
+			for (int j = 0; j < in; j++)
+				inputs = updateByOrder(inputs, j+1, graycode[i][j]);
+
+			int index = 0;
+			while (index < count){
+				if (strcmp(bank[index], "AND") == 0){
+					one = getVariableFromList(inputs, bank[index+1]);
+					two = getVariableFromList(inputs, bank[index+2]);
+					if (one == -1) one = atoi(bank[index+1]);
+					if (two == -1) two = atoi(bank[index+2]);
+					inputs = updateByName(inputs, bank[index+3], AND(one, two));
+					index = index + 3;
+				  } else if (strcmp(bank[index], "OR") == 0){	
+					one = getVariableFromList(inputs, bank[index+1]);
+					two = getVariableFromList(inputs, bank[index+2]);
+					if (one == -1) one = atoi(bank[index+1]);
+					if (two == -1) two = atoi(bank[index+2]);
+					inputs = updateByName(inputs, bank[index+3], OR(one, two));
+					index = index+3;
+				  } else if (strcmp(bank[index], "NOT") == 0){ 
+				  	one = getVariableFromList(inputs, bank[index+1]);
+					if (one == -1) one = atoi(bank[index+1]);
+					inputs = updateByName(inputs, bank[index+2], NOT(one));
+					index = index + 2;
+				  } else if (strcmp(bank[index], "NAND") == 0){	
+				  	one = getVariableFromList(inputs, bank[index+1]);
+					two = getVariableFromList(inputs, bank[index+2]);
+					if (one == -1) one = atoi(bank[index+1]);
+					if (two == -1) two = atoi(bank[index+2]);
+					inputs = updateByName(inputs, bank[index+3], NAND(one, two));
+					index = index + 3;
+				  } else if (strcmp(bank[index], "NOR") == 0){	
+				  	one = getVariableFromList(inputs, bank[index+1]);
+					two = getVariableFromList(inputs, bank[index+2]);
+					if (one == -1) one = atoi(bank[index+1]);
+					if (two == -1) two = atoi(bank[index+2]);
+					inputs = updateByName(inputs, bank[index+3], NOR(one, two));
+				  	index = index + 3;
+				  } else if (strcmp(bank[index], "XOR") == 0){
+				  	one = getVariableFromList(inputs, bank[index+1]);
+					two = getVariableFromList(inputs, bank[index+2]);
+					if (one == -1) one = atoi(bank[index+1]);
+					if (two == -1) two = atoi(bank[index+2]);
+					inputs = updateByName(inputs, bank[index+3], XOR(one, two));
+					index = index + 3;
+                                  } else if (strcmp(bank[index], "XNOR") == 0){
+				  	one = getVariableFromList(inputs, bank[index+1]);
+					two = getVariableFromList(inputs, bank[index+2]);
+					if (one == -1) one = atoi(bank[index+1]);
+					if (two == -1) two = atoi(bank[index+2]);
+					inputs = updateByName(inputs, bank[index+3], XNOR(one, two));
+					index = index + 3;
+                                  } else if (strcmp(bank[index], "DECODER") == 0){
+				  	int bits = atoi(bank[index+1]);
+					int tag = 0, hit = 0;
+					for (int r = (index+2+bits); r < (index+2+bits)+(1 << bits); r++){ //lets us look at each output value
+						int* binArr = getGrayArray(bits, tag);	
+						tag++;
+						hit = 0;
+						for (int s = 0; s < bits; s++){
+						int tmp = 0;
+						if (isNumeric(bank[index+2+s]) == 1) tmp = atoi(bank[index+2+s]);
+						else tmp = getVariableFromList(inputs, bank[index+2+s]);
+							if (binArr[s] != tmp){
+								inputs = updateByName(inputs, bank[r], 0);
+								hit=1;
+							}
+						}
+						if (hit == 0) //no contradiction, must be true
+							inputs = updateByName(inputs, bank[r], 1);
+						free(binArr);
+					}
+				  } else if (strcmp(bank[index], "MULTIPLEXER") == 0){
+					int num_inputs = atoi(bank[index+1]);
+					int num_selectors = 0;
+					int temp = num_inputs;
+					while (temp > 1){
+						temp = temp/2;		
+						num_selectors++;
+					} 
+					int total = 0;
+					for (int i = 0; i <  (num_selectors); i++){
+						int val = getVariableFromList(inputs, bank[index+num_inputs+2+i]);
+						if (val == -1) val = atoi(bank[index+num_inputs+2+i]);
+						total = total + (val * (1 << (num_selectors-1-i)));
+					}
+					int v = 0;
+					for (int t = total; t > 0; t = t >> 1)
+						v = v ^ t;
+					if (isNumeric(bank[index+2+v]) == 1)
+						inputs = updateByName(inputs, bank[index+2+num_inputs+num_selectors], atoi(bank[index+2+v]));
+					else {
+						int q = getVariableFromList(inputs, bank[index+2+v]);
+						inputs = updateByName(inputs, bank[index+2+num_inputs+num_selectors], q);
+					}
+					index = index + 2+num_inputs+num_selectors;
+
+				  }  
+				index++;
+			}	
+			for (int k = 0; k < out; k++)
+				graycode[i][k+in] = getVariableFromList(inputs, getVariableByOrder(inputs, -(k+1)));	
+		}	
+		for (int n = 0; n < (1<<in); n++){
+			for (int m = 0; m < (in+out); m++)
+				printf("%d ", graycode[n][m]);
+			printf("\n");
+		}	
+		freeNodes(inputs);
+		for (int i = 0; i < (1<<in); i++)
+			free(graycode[i]);
+		free(graycode);
+		for (int i = 0; i < count; i++)
+			free(bank[i]);
+	
+		return 0;
+	}
+
+	int NOT(int n){
+		if (n == 1) 
+			return 0;
+		return 1;
+	}	
+	int AND(int x, int y){
+		return x&y;
+	}
+	int OR(int x, int y){
+		return x|y;
+	}
+	int NAND(int x, int y){
+		if (AND(x, y) == 1) 
+			return 0;
+		else return 1;
+	}
+	int NOR(int x, int y){
+		if (OR(x, y) == 1)
+			return 0;
+		else return 1;
+	}
+	int XOR(int x, int y){
+		return x ^ y;
+	}
+	int XNOR(int x, int y){
+		return x == y;
+	}
+	
+	
+	Node* addVariableToList(Node* head, int order, int value, char* name){
+		Node* insert  = malloc(sizeof(Node));
+		insert->name = name;
+		insert->value = value;
+		insert->next = head;
+		insert->order = order;
+		head = insert;		
+		return head;
+	}
+	int getVariableFromList(Node* head, char* name){
+		Node* curr = head;
+		while (curr != NULL && name != NULL){
+			if (curr->name != NULL && strcmp(name, curr->name) == 0)
+				return curr->value;
+			curr = curr->next;
+		}
+		return -1;
+	}
+	char* getVariableByOrder(Node* head, int order){
+		Node* curr = head;
+		while (curr != NULL){
+			if (curr->order == order)
+				return curr->name;
+			curr = curr->next;
+		}
+	return NULL;
+	}
+	Node* updateByOrder(Node* head, int order, int value){
+		Node* curr = head;
+		while (curr != NULL){
+			if (curr->order == order){
+				curr->value = value;
+				return head;
+			}
+			curr = curr->next;
+		}
+		return head;
+	}
+	Node* updateByName(Node* head, char* name, int value){
+		Node* curr = head;
+		while (curr != NULL){
+			if (name != NULL && strcmp(curr->name, name) == 0){
+				curr->value = value;
+				return head;
+			}
+			curr = curr->next;
+		}
+		return addVariableToList(inputs, 0, value, name);
+	}
+	void generateEmptyGrayCode(){	
+		for (int j = 0; j < (1<<in); j++){
+			graycode[j][(in+out)-1] = 0;
+		}
+		for (int i = 0; i < (1<<in); i++){
+			int num = i ^ (i >> 1); //dec - > dec gray
+			int index = in-1;
+			while (num > 0){//gray -> binary gray
+				graycode[i][index] = num % 2;
+				num = num / 2;
+				index--;
 			}
 		}	
-		P_CacheMisses++;
-		P_MemoryReads++;
-		if (op == 'W') 
-			P_MemoryWrites++;
-		int index = 0, wrt = 0, timestamp = cached[set][0].timestamp;
-		for (int i = 0; i < associativity; i++){
-			if (cached[set][i].valid == 0){ 
-				cached[set][i].valid = 1;
-				cached[set][i].tag = tag;
-				cached[set][i].timestamp = count;
-				count++;
-				wrt = 1;
-				break;
-			} 
-			if (cached[set][i].timestamp < timestamp){
-				timestamp = cached[set][i].timestamp;
-				index = i;
-			}
- 		}
-		if (wrt == 0){
-			cached[set][index].tag = tag;
-			cached[set][index].timestamp = count;
-			count++;
+	}
+	int* getGrayArray(int bits, int n){
+		int* ret = malloc(bits * sizeof(int));
+		for (int i = 0; i < bits; i++)
+			ret[i] = 0;
+		int index = bits-1;
+		n = (n ^ (n >> 1));
+		while (n > 0){
+			ret[index] = n%2;
+			n = n / 2;
+			index--;
 		}
-	        long prefetch_address = address; 
-		int hit;
-		for (int i = 0; i < prefetch_size; i++){
-			hit = 0;
-			prefetch_address = prefetch_address + block_size;
-			unsigned int preset = (prefetch_address >> block_bits) & ((1 << index_bits) - 1);
-			unsigned long pretag = (prefetch_address >> block_bits) >> index_bits;
-			for (int j = 0; j < associativity; j++){
-				if (cached[preset][j].tag == pretag)
-					hit = 1;
-			}
-			if (hit == 1) continue;
-			P_MemoryReads++;
-		     	int index = 0, timestamp = cached[preset][0].timestamp;
-		     	for (int f = 0; f < associativity; f++){
-				if (cached[preset][f].valid == 0){ 
-					cached[preset][f].valid = 1;
-					cached[preset][f].tag = pretag;
-					cached[preset][f].timestamp = count;
-					count++;
-					hit = 1;
-					break;
-				}
-				if (cached[preset][f].timestamp < timestamp){
-					timestamp = cached[preset][f].timestamp;
-					index = f;
-				}
- 		        }  
-		     	if (hit == 1) continue; 
-			cached[preset][index].valid = 1;
-		     	cached[preset][index].tag = pretag;
-			cached[preset][index].timestamp = count;		
-			count++;
+		return ret; 
+	}
+	int isNumeric(char* n){
+		if (strspn(n, "01") == strlen(n))
+			return 1;
+		return 0;
+	}
+	void freeNodes(Node* n){
+		Node* temp = n;
+		while (n != NULL){
+			temp = n;
+			n = n->next;
+			free(temp);
 		}
-	return cached;
-}
+	}
+	
