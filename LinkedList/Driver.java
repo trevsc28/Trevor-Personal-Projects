@@ -2,7 +2,7 @@ public class Driver
 {
   public static void main(String[] args)
   {
-	//Trevor Scott
+	
     ScottLinkedList<String> list = new ScottLinkedList<String>();
     list.add("Trevor");
     list.add("Mary");
