@@ -1,7 +1,7 @@
 import java.awt.*;
 import javax.swing.*;
 import java.awt.event.*;
-//TREVOR SCOTT
+
 public class Customer extends Sprite implements ActionListener
 {
   Timer t;
