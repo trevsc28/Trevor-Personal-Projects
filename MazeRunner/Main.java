@@ -27,7 +27,7 @@ public class Main extends JApplet implements ActionListener
     setSize(appSize+10, appSize+10);
 
     //Set up maze creator
-    mr = new MazeReader("nayefmaze40.txt");
+    mr = new MazeReader("maze.txt");
     mr.importGrid();
     gridX = mr.getGridXO();
 
