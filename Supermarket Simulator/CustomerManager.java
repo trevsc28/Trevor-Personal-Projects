@@ -3,7 +3,7 @@ import javax.swing.*;
 import java.awt.event.*;
 import java.util.LinkedList;
 import java.util.Random;
-//TREVOR SCOTT
+
 public class CustomerManager implements ActionListener
 {
   Deque<Deque<Customer>>  lineManager;
