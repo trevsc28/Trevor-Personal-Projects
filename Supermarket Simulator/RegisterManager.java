@@ -3,7 +3,7 @@ import javax.swing.*;
 import java.awt.event.*;
 import java.util.LinkedList;
 import java.awt.*;
-//TREVOR SCOTT
+
 public class RegisterManager implements ActionListener
 {
   Deque registers, temp, newLine;
