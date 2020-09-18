@@ -8,7 +8,7 @@ import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import java.util.Hashtable;
-//TREVOR SCOTT
+
 public class marketmain extends JApplet implements ActionListener, ChangeListener
 {
   Timer t;
