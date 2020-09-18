@@ -1,3 +1,5 @@
-# This is a handwritten Linked List class in Java. 
+# Handwritten Linked List in Java
 
 Self Explanatory - to run, head to the Driver.java file. 
+
+I also wrote this in High School. 
