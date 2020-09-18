@@ -10,5 +10,8 @@ We were given a machine learning algorithm to predcit future housing prices give
 
 I had to use a ton of matrices and pointers to get this done, including some linear algebra work.
 
+## Project Three - Cache Simulator
+I created a cache simulator with prefetching in C. You give it all the parameters, and it spits back the hits and misses with and without prefetches. Requires large file of data.  
 
-
+## Project Four - Circuit Simulator
+I created a digital logic circuit simualtor which not only includes logical operations like AND/OR/NOR, but includes more complex operations like DECODER and MULTIPLEXER
